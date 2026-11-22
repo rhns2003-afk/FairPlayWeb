@@ -46,3 +46,7 @@ next-env.d.ts
 .eslintcache
 .turbo
 .swc
+
+node_modules/
+.env
+dist/
