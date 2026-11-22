@@ -4,7 +4,7 @@ import { io } from "socket.io-client";
 import { games } from "../data/games";
 import Cursors from "../components/Cursors";
 
-const SERVER_URL = "http://localhost:3001";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export default function Game() {
   const { id } = useParams();

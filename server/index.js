@@ -3,11 +3,11 @@ const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
 
-const ORIGIN = "http://localhost:5173";
+const ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",");
 const app = express();
-app.use(cors({ origin: ORIGIN }));
+app.use(cors({ origin: ORIGINS }));
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: ORIGIN } });
+const io = new Server(server, { cors: { origin: ORIGINS } });
 
 const COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#38d9a9", "#4dabf7", "#9775fa", "#f783ac"];
 const LINES = [
@@ -141,4 +141,5 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(3001, () => console.log("Server running on http://localhost:3001"));
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
