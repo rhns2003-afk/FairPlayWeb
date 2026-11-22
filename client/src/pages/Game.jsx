@@ -3,6 +3,13 @@ import { Link, useParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { games } from "../data/games";
 import Cursors from "../components/Cursors";
+import TicTacToeBoard from "../components/TicTacToeBoard";
+import UltimateBoard from "../components/UltimateBoard";
+
+const boards = {
+  "tic-tac-toe": TicTacToeBoard,
+  "ultimate-tic-tac-toe": UltimateBoard,
+};
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
@@ -66,6 +73,7 @@ export default function Game() {
   }
 
   const emit = (event, payload) => socketRef.current?.emit(event, payload);
+  const Board = boards[id];
 
   const mySymbol =
     state && me ? (state.seats.X === me.id ? "X" : state.seats.O === me.id ? "O" : null) : null;
@@ -109,19 +117,13 @@ export default function Game() {
 
           <p className="status">{status}</p>
           {notice && <p className="notice">{notice}</p>}
-
-          <div className="board">
-            {state.board.map((cell, i) => (
-              <button
-                key={i}
-                className={`cell ${cell ?? ""}`}
-                disabled={!seated || Boolean(cell) || Boolean(state.winner)}
-                onClick={() => emit("move", i)}
-              >
-                {cell}
-              </button>
-            ))}
-          </div>
+          
+          <Board
+            state={state}
+            seated={seated}
+            myTurn={seated && Boolean(seatsFull) && !state.winner && state.turn === mySymbol}
+            onMove={(move) => emit("move", move)}
+          />
 
           <div className="actions">
             {seated ? (

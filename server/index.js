@@ -10,33 +10,25 @@ app.get("/", (req, res) => res.send("FairPlay server is running"));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ORIGINS } });
 
-const COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#38d9a9", "#4dabf7", "#9775fa", "#f783ac"];
-const LINES = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8],
-  [0, 3, 6], [1, 4, 7], [2, 5, 8],
-  [0, 4, 8], [2, 4, 6],
-];
+// To add a game: create a module in ./games and register it here
+const games = {
+  "tic-tac-toe": require("./games/ticTacToe"),
+  "ultimate-tic-tac-toe": require("./games/ultimateTicTacToe"),
+};
 
+const COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#38d9a9", "#4dabf7", "#9775fa", "#f783ac"];
 const rooms = {}; // one room per game id
 
 function getRoom(gameId) {
   if (!rooms[gameId]) {
-    rooms[gameId] = { users: {}, seats: { X: null, O: null }, board: Array(9).fill(null), turn: "X", winner: null, colorIndex: 0 };
+    rooms[gameId] = {
+      users: {},
+      seats: { X: null, O: null },
+      game: games[gameId].create(),
+      colorIndex: 0,
+    };
   }
   return rooms[gameId];
-}
-
-function resetGame(room) {
-  room.board = Array(9).fill(null);
-  room.turn = "X";
-  room.winner = null;
-}
-
-function findWinner(board) {
-  for (const [a, b, c] of LINES) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
-  }
-  return board.every(Boolean) ? "draw" : null;
 }
 
 function broadcast(gameId) {
@@ -44,13 +36,11 @@ function broadcast(gameId) {
   io.to(gameId).emit("state", {
     users: Object.values(room.users),
     seats: room.seats,
-    board: room.board,
-    turn: room.turn,
-    winner: room.winner,
+    ...room.game, // game-specific state (board, turn, winner, ...)
   });
 }
 
-function freeSeat(room, id) {
+function freeSeat(room, gameId, id) {
   let freed = false;
   for (const symbol of ["X", "O"]) {
     if (room.seats[symbol] === id) {
@@ -58,12 +48,13 @@ function freeSeat(room, id) {
       freed = true;
     }
   }
-  if (freed) resetGame(room); // a player left, so the match restarts
+  if (freed) room.game = games[gameId].create(); // a player left, so the match restarts
   return freed;
 }
 
 io.on("connection", (socket) => {
   socket.on("join", (gameId) => {
+    if (!games[gameId] || socket.data.gameId) return;
     const room = getRoom(gameId);
     socket.data.gameId = gameId;
     socket.join(gameId);
@@ -97,23 +88,19 @@ io.on("connection", (socket) => {
   socket.on("leave-seat", () => {
     const gameId = socket.data.gameId;
     if (!gameId) return;
-    if (freeSeat(getRoom(gameId), socket.id)) broadcast(gameId);
+    if (freeSeat(getRoom(gameId), gameId, socket.id)) broadcast(gameId);
   });
 
-  socket.on("move", (index) => {
+  socket.on("move", (payload) => {
     const gameId = socket.data.gameId;
     if (!gameId) return;
     const room = getRoom(gameId);
     const symbol = room.seats.X === socket.id ? "X" : room.seats.O === socket.id ? "O" : null;
 
-    if (!symbol || room.turn !== symbol) return;
-    if (!room.seats.X || !room.seats.O) return; // need both players
-    if (room.winner || !Number.isInteger(index) || index < 0 || index > 8 || room.board[index]) return;
+    if (!symbol || !room.seats.X || !room.seats.O) return; // need two seated players
+    if (room.game.winner || room.game.turn !== symbol) return;
 
-    room.board[index] = symbol;
-    room.winner = findWinner(room.board);
-    if (!room.winner) room.turn = symbol === "X" ? "O" : "X";
-    broadcast(gameId);
+    if (games[gameId].move(room.game, symbol, payload)) broadcast(gameId);
   });
 
   socket.on("reset", () => {
@@ -121,7 +108,7 @@ io.on("connection", (socket) => {
     if (!gameId) return;
     const room = getRoom(gameId);
     if (room.seats.X !== socket.id && room.seats.O !== socket.id) return;
-    resetGame(room);
+    room.game = games[gameId].create();
     broadcast(gameId);
   });
 
@@ -135,7 +122,7 @@ io.on("connection", (socket) => {
     const gameId = socket.data.gameId;
     if (!gameId) return;
     const room = getRoom(gameId);
-    freeSeat(room, socket.id);
+    freeSeat(room, gameId, socket.id);
     delete room.users[socket.id];
     io.to(gameId).emit("cursor-gone", socket.id);
     broadcast(gameId);
