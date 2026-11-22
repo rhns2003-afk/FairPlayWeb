@@ -6,6 +6,7 @@ const { Server } = require("socket.io");
 const ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",");
 const app = express();
 app.use(cors({ origin: ORIGINS }));
+app.get("/", (req, res) => res.send("FairPlay server is running"));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ORIGINS } });
 
